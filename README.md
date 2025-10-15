@@ -1,3 +1,6 @@
+
+## In Invoices
+```sql 
 create table invoices_ins (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     
@@ -34,8 +37,10 @@ create table invoices_ins (
     created_at DATETIME2 NULL,
     updated_at DATETIME2 NULL
 );
+````
 
-
+## Out Invoices
+```sql 
 create table invoices_out (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     
@@ -72,9 +77,10 @@ create table invoices_out (
     created_at DATETIME2 NULL,
     updated_at DATETIME2 NULL
 );
+````
 
-
-
+## e archive
+```sql 
 CREATE TABLE e_archive_invoices_outs (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     
@@ -99,12 +105,29 @@ CREATE TABLE e_archive_invoices_outs (
     created_at DATETIME2 NULL,
     updated_at DATETIME2 NULL
 );
+````
 
 
+## sync 
+```sql 
 CREATE TABLE sync_logs (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     company_code NVARCHAR(255)  NULL,
     created_at DATETIME2 NULL,
     updated_at DATETIME2 NULL
 );
+````
 
+
+- PHP SQL SERVER DLL VE PHP INI yükle !!!!!
+
+DEPLOY
+https://gist.github.com/amestsantim/d79cc93fe98d164d13a11eda473a7a9a
+
+
+
+## DOSYALARA İZİN VER
+
+```powershell
+icacls "C:\inetpub\wwwroot\fapp\storage" /grant "IIS_IUSRS:(OI)(CI)F" /T
+icacls "C:\inetpub\wwwroot\fapp\bootstrap\cache" /grant "IIS_IUSRS:(OI)(CI)F" /T
