@@ -41,7 +41,7 @@ create table invoices_ins (
 
 ## Out Invoices
 ```sql 
-create table invoices_out (
+create table invoices_outs (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     
     -- Attributes
