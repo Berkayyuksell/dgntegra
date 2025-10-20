@@ -26,9 +26,13 @@ class EArchiveInvoicesOut extends Model
         'company_code',
     ];
 
-    public function V3Invoices()
+    public function V3InvoiceHeader()
     {
         return $this->hasMany(AllInvoices::class,'InvoiceHeaderID', 'uuid');
+    }
+
+    public function V3trInvoiceHeader(){
+        return $this->hasMany(TrInvoiceHeader::class,'InvoiceHeaderID', 'uuid');
     }
 
 

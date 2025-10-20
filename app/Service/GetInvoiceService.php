@@ -2,7 +2,7 @@
 namespace App\Service;
 use Illuminate\Support\Facades\Http;
 use App\Models\EArchiveInvoicesOut;
-use App\Service\GetAuthToken;
+use App\Service\AuthService;
 use Carbon\Carbon;
 
 class GetInvoiceService{

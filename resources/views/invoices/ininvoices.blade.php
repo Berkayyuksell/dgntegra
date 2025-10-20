@@ -12,7 +12,7 @@
                     <div class="d-flex align-items-center gap-2">
                         <input type="date" id="start_date" class="form-control form-control-sm" placeholder="Başlangıç" />
                         <input type="date" id="end_date" class="form-control form-control-sm" placeholder="Bitiş" />
-                        <button id="filterd" class="btn btn-sm btn-warning">İşlenmemiş </button>
+                        <button id="filterd2" class="btn btn-sm btn-warning">İşlenmemiş </button>
                         <button id="filterd" class="btn btn-sm btn-danger">Gitmeyen </button>
                         <button id="filterBtn" class="btn btn-sm btn-dark">Filtrele</button>
                         <button id="resetBtn" class="btn btn-sm btn-secondary">Temizle</button>
@@ -27,11 +27,10 @@
                         <thead class="bg-light">
                         <tr>
                             <th class="border-0 py-3 ps-4">ID</th>
-                            <th class="border-0 py-3">Tarih</th>
-                            <th class="border-0 py-3">Tutar</th>
-                            <th class="border-0 py-3">Müşteri</th>
                             <th class="border-0 py-3">Tedarikçi</th>
+                            <th class="border-0 py-3">Tutar</th>
                             <th class="border-0 py-3">Durum</th>
+                            <th class="border-0 py-4 "style="width: 125px;">Tarih</th>
                             <th class="border-0 py-3 pe-4 text-end">İşlemler</th>
                         </tr>
                         </thead>
@@ -45,11 +44,20 @@
 
 @section('scripts')
     <script>
+
         $(function() {
-            $('#invoiceTable').DataTable({
+            window.isGitmeyenFilterActive = false;
+            var table = $('#invoiceTable').DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: '{{ route("invoices.index_in.data") }}',
+                ajax: {
+                    url : '{{ route("invoices.index_in.data") }}',
+                    data: function(d){
+                        d.start_date = $('#start_date').val();
+                        d.end_date = $('#end_date').val();
+                        d.isInvoiceOkey = window.isGitmeyenFilterActive ? 0 : '';
+                    }
+                },
                 columns: [
                     {
                         data: 'external_id',
@@ -57,27 +65,23 @@
                         className: 'ps-4 text-muted'
                     },
                     {
-                        data: 'issue_date',
-                        name: 'issue_date'
+                        data: 'supplier',
+                        name: 'supplier'
                     },
                     {
                         data: 'payable_amount',
-                        name: 'payable_amount',
-                        className: 'fw-bold text-dark'
-                    },
-                    {
-                        data: 'customer',
-                        name: 'customer'
-                    },
-                    {
-                        data: 'supplier',
-                        name: 'supplier'
+                        name: 'payable_amount'
                     },
                     {
                         data: 'status_badge',
                         name: 'status_badge',
                         orderable: false,
                         searchable: false
+                    },
+                    {
+                        data: 'cdate',
+                        name: 'cdate',
+                        className: 'fw-bold text-dark'
                     },
                     {
                         data: 'actions',
@@ -100,6 +104,24 @@
                     $('.dataTables_filter input').addClass('form-control form-control-sm').css('width', '250px');
                     $('.dataTables_length select').addClass('form-select form-select-sm').css('width', 'auto');
                 }
+            });
+
+            $('#filterd').on('click', function () {
+                window.isGitmeyenFilterActive = true;
+                table.ajax.reload();
+            });
+
+
+            $('#filterBtn').on('click', function () {
+                window.isGitmeyenFilterActive = false;
+                table.ajax.reload();
+            });
+
+
+            $('#resetBtn').on('click', function () {
+                $('#start_date, #end_date').val('');
+                window.isGitmeyenFilterActive = false;
+                table.ajax.reload();
             });
 
 

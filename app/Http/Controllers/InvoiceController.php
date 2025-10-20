@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 use App\Helper\Helpers;
+use App\Models\AllInvoices;
 use App\Models\EArchiveInvoicesOut;
 use App\Models\InvoicesIn;
 use App\Models\InvoicesOut;
 use App\Models\SyncLog;
+use App\Models\trInvoiceHeader;
 use App\Service\GetArchiveService;
+use App\Service\GetInvoiceHtmlService;
 use App\Service\GetInvoiceService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use Symfony\Component\Process\Process;
 
 
@@ -47,68 +52,119 @@ class InvoiceController extends Controller
         return view('invoices.index');
     }
 
-    /**
-     * @throws Exception
-     * @throws \Exception
-     */
-    public function get_table_data()
-    {
-        $data = InvoicesOut::query();
+    public function get_table_data(Request $request){
+        $data = trInvoiceHeader::leftJoin('invoices_outs as v', 'v.uuid', '=', 'trInvoiceHeader.InvoiceHeaderID')
+            ->where('trInvoiceHeader.IsReturn', '0')
+            ->where('trInvoiceHeader.TransTypeCode', 2)
+            ->where('trInvoiceHeader.InvoiceTypeCode', '1')
+            ->select(
+                'trInvoiceHeader.*',
+                DB::raw("CASE WHEN v.uuid IS NULL THEN 0 ELSE 1 END AS isInvoiceOkey")
+            )
+            ->with(['V3AllInvoices', 'V3OutInvoices']);
+
+        if ($request->has('isInvoiceOkey') && $request->isInvoiceOkey == '0') {
+            $data->whereNull('v.uuid');
+        }
+        if (!empty($request->start_date) && !empty($request->end_date)) {
+            $start = $request->start_date . ' 00:00:00';
+            $end = $request->end_date . ' 23:59:59';
+            $data->whereBetween('trInvoiceHeader.InvoiceDate', [$start, $end]);
+        } elseif (!empty($request->start_date)) {
+            $data->whereDate('trInvoiceHeader.InvoiceDate', '>=', $request->start_date);
+        } elseif (!empty($request->end_date)) {
+            $data->whereDate('trInvoiceHeader.InvoiceDate', '<=', $request->end_date);
+        }
 
         return DataTables::of($data)
-            ->addIndexColumn()
-            ->editColumn('issue_date', fn($row) => \Carbon\Carbon::parse($row->issue_date)->format('Y-m-d'))
-            ->editColumn('payable_amount', fn($row) => number_format((float) $row->payable_amount, 2, ',', '.') . ' ₺')
-            ->orderColumn('payable_amount', function ($query, $order) {
-                $query->orderByRaw('CAST(payable_amount AS DECIMAL(15,2)) ' . $order);
-            })
-            ->addColumn('status_badge', function ($row) {
-                $color = $row->status_description === 'SUCCEED' ? 'success' : 'warning';
-                return '<span class="badge bg-' . $color . '">' . e($row->status_description) . '</span>';
-            })
+            ->editColumn('doc_price',fn($row)=> number_format($row->V3AllInvoices->first()->Doc_PriceVI,2,',','.') ?? '')
             ->addColumn('actions', fn($row) => '<a href="/invoice/'.$row->id.'" class="btn btn-sm btn-dark">Görüntüle</a>')
+            ->addColumn('status_badge', function ($row) {
+                $color = $row->isInvoiceOkey === '1' ? 'success' : 'danger';
+                return '<span class="badge bg-' . $color . '">' . e($row->isInvoiceOkey ? 'Düşmüş' : 'E-Doganda Yok') . '</span>';
+            })
+            ->addColumn('customers',fn($row)=>$row->customer ?? '')
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
     }
 
-    public function get_table_data_in(){
-        $data = InvoicesIn::query();
+
+
+    public function get_table_data_in(Request $request){
+        $data = InvoicesIn::leftjoin('e_InboxInvoiceHeader as v', 'v.UUID', '=', 'invoices_ins.uuid')
+            ->select(
+                'invoices_ins.*',
+                DB::raw("CASE WHEN v.UUID IS NULL THEN 0 ELSE 1 END AS isInvoiceOkey")
+            )
+        ->with('V3InboxInvoiceHeader');
+
+        if ($request->has('isInvoiceOkey') && $request->isInvoiceOkey == '0') {
+            $data->whereNull('v.UUID');
+        }
+        if (!empty($request->start_date) && !empty($request->end_date)) {
+            $start = $request->start_date . ' 00:00:00';
+            $end = $request->end_date . ' 23:59:59';
+            $data->whereBetween('invoices_ins.cdate', [$start, $end]);
+        } elseif (!empty($request->start_date)) {
+            $data->whereDate('invoices_ins.cdate', '>=', $request->start_date);
+        } elseif (!empty($request->end_date)) {
+            $data->whereDate('invoices_ins.cdate', '<=', $request->end_date);
+        }
+
 
         return DataTables::of($data)
-            ->addIndexColumn()
-            ->editColumn('issue_date', fn($row) => \Carbon\Carbon::parse($row->issue_date)->format('Y-m-d'))
-            ->editColumn('payable_amount', fn($row) => number_format((float) $row->payable_amount, 2, ',', '.') . ' ₺')
-            ->orderColumn('payable_amount', function ($query, $order) {
-                $query->orderByRaw('CAST(payable_amount AS DECIMAL(15,2)) ' . $order);
-            })
-            ->addColumn('status_badge', function ($row) {
-                $color = $row->status_description === 'SUCCEED' ? 'success' : 'warning';
-                return '<span class="badge bg-' . $color . '">' . e($row->status_description) . '</span>';
-            })
             ->addColumn('actions', fn($row) => '<a href="/invoice/'.$row->id.'" class="btn btn-sm btn-dark">Görüntüle</a>')
+            ->addColumn('status_badge', function ($row) {
+                $color = $row->isInvoiceOkey === '1' ? 'success' : 'danger';
+                return '<span class="badge bg-' . $color . '">' . e($row->isInvoiceOkey ? 'Düşmüş' : 'E-Doganda Yok') . '</span>';
+            })
+            ->editColumn('cdate',fn($row)=> $row->cdate ? \Carbon\Carbon::parse($row->cdate)->format('Y-m-d')
+                : '')
+            ->addColumn('customers',fn($row)=>$row->V3OutInvoices->customer ?? '')
+            ->editColumn('payable_amount',fn($row)=> number_format($row->payable_amount,2,',','.') ?? '')
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
+
 
 
     }
 
 
 
-    public function get_table_data_archive(){
-        $data = EArchiveInvoicesOut::query();
+
+
+    public function get_table_data_archive(Request $request){
+        $data = trInvoiceHeader::leftJoin('e_archive_invoices_outs as v', 'v.uuid', '=', 'trInvoiceHeader.InvoiceHeaderID')
+            ->where('trInvoiceHeader.IsReturn', '0')
+            ->where('trInvoiceHeader.TransTypeCode', 2)
+            ->where('trInvoiceHeader.InvoiceTypeCode', '2')
+            ->select(
+                'trInvoiceHeader.*',
+                DB::raw("CASE WHEN v.uuid IS NULL THEN 0 ELSE 1 END AS isInvoiceOkey")
+            )
+            ->with(['V3AllInvoices', 'V3OutInvoices']);
+
+        if ($request->has('isInvoiceOkey') && $request->isInvoiceOkey == '0') {
+            $data->whereNull('v.uuid');
+        }
+        if (!empty($request->start_date) && !empty($request->end_date)) {
+            $start = $request->start_date . ' 00:00:00';
+            $end = $request->end_date . ' 23:59:59';
+            $data->whereBetween('trInvoiceHeader.InvoiceDate', [$start, $end]);
+        } elseif (!empty($request->start_date)) {
+            $data->whereDate('trInvoiceHeader.InvoiceDate', '>=', $request->start_date);
+        } elseif (!empty($request->end_date)) {
+            $data->whereDate('trInvoiceHeader.InvoiceDate', '<=', $request->end_date);
+        }
 
         return DataTables::of($data)
-            ->addIndexColumn()
-            ->editColumn('issue_date', fn($row) => \Carbon\Carbon::parse($row->issue_date)->format('Y-m-d'))
-            ->editColumn('payable_amount', fn($row) => number_format((float) $row->payable_amount, 2, ',', '.') . ' ₺')
-            ->orderColumn('payable_amount', function ($query, $order) {
-                $query->orderByRaw('CAST(payable_amount AS DECIMAL(15,2)) ' . $order);
-            })
-            ->addColumn('status_badge', function ($row) {
-                $color = $row->status_description === 'SUCCEED' ? 'success' : 'warning';
-                return '<span class="badge bg-' . $color . '">' . e($row->status_description) . '</span>';
-            })
+            ->editColumn('doc_price',fn($row)=> number_format($row->V3AllInvoices->first()->Doc_PriceVI,2,'.',',') ?? '')
             ->addColumn('actions', fn($row) => '<a href="/invoice/'.$row->id.'" class="btn btn-sm btn-dark">Görüntüle</a>')
+            ->addColumn('status_badge', function ($row) {
+                $color = $row->isInvoiceOkey === '1' ? 'success' : 'danger';
+                return '<span class="badge bg-' . $color . '">' . e($row->isInvoiceOkey ? 'Düşmüş' : 'E-Doganda Yok') . '</span>';
+            })
+            ->addColumn('customers',fn($row)=>$row->V3OutInvoices->customer ?? '')
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
 
@@ -196,13 +252,28 @@ class InvoiceController extends Controller
         }
     }
 
+    public function getHtml($invoiceId, $direction,$companyCode){
+        $user = Helpers::getUser($companyCode);
+        $session = AuthService::GetAuthToken($user['UserName'],$user['Password']);
+        try {
+            $service = new GetInvoiceHtmlService();
+            $html = $service->getHtml($session, $invoiceId, $direction, $direction);
+
+            return response($html, 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 400);
+        }
+    }
+
 
 
 
     public function testtriggerSyncs()
     {
         try {
-            // Artisan komutu oluşturuluyor
             $process = new Process([
                 PHP_BINARY,
                 base_path('artisan'),

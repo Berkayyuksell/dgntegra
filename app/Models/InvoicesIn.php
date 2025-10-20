@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 
 class InvoicesIn extends Model
 {
@@ -35,14 +37,18 @@ class InvoicesIn extends Model
     ];
 
 
-    public function V3Invoices()
+
+    public function V3InboxInvoiceHeader()
     {
-        return $this->hasMany(AllInvoices::class,'InvoiceHeaderID', 'uuid');
+        return $this->hasMany(e_InboxInvoiceHeader::class,'UUID', 'uuid');
     }
 
-    public function V3InvoicesIn()
+    protected static function booted()
     {
-        return $this->hasMany(e_InboxInvoiceHeader::class,'InvoiceHeaderID', 'uuid');
+        static::addGlobalScope('last_month', function (Builder $builder) {
+            $oneMonthAgo = Carbon::now()->subMonth()->startOfDay();
+            $builder->where('issue_date', '>=', $oneMonthAgo);
+        });
     }
 
 

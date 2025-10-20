@@ -67,12 +67,13 @@
                     <table class="table table-hover mb-0" id="invoiceTable">
                         <thead class="bg-light">
                         <tr>
-                            <th class="border-0 py-3 ps-4">ID</th>
-                            <th class="border-0 py-3">Tarih</th>
-                            <th class="border-0 py-3">Tutar</th>
+                            <th class="border-0 py-3 ps-4">Ref no</th>
+                            <th class="border-0 py-3">Fatura numara</th>
                             <th class="border-0 py-3">Müşteri</th>
-                            <th class="border-0 py-3">Tedarikçi</th>
+                            <th class="border-0 py-3">Tutar</th>
+                            <th class="border-0 py-3">Birim </th>
                             <th class="border-0 py-3">Durum</th>
+                            <th class="border-0 py-3">Tarih</th>
                             <th class="border-0 py-3 pe-4 text-end">İşlemler</th>
                         </tr>
                         </thead>
@@ -87,37 +88,52 @@
 @section('scripts')
     <script>
         $(function() {
-            $('#invoiceTable').DataTable({
+            window.isGitmeyenFilterActive = false;
+            var table = $('#invoiceTable').DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: '{{ route("invoices.archive.data") }}',
+                ajax: {
+                    url: '{{ route("invoices.archive.data") }}',
+                data: function (d) {
+                    d.start_date = $('#start_date').val();
+                    d.end_date = $('#end_date').val();
+                    d.isInvoiceOkey = window.isGitmeyenFilterActive ? 0 : '';
+                }
+            },
                 columns: [
                     {
-                        data: 'invoice_id',
-                        name: 'invoice_id'
+                        data: 'InvoiceNumber',
+                        name: 'InvoiceNumber',
+                        className: 'ps-4 text-muted'
                     },
                     {
-                        data: 'issue_date',
-                        name: 'issue_date'
-                    },
-                    {
-                        data: 'payable_amount',
-                        name: 'payable_amount',
+                        data: 'EInvoiceNumber',
+                        name: 'EInvoiceNumber',
                         className: 'fw-bold text-dark'
                     },
                     {
-                        data: 'customer_name',
-                        name: 'customer_name'
+                        data: 'customers',
+                        name: 'customers'
                     },
                     {
-                        data: 'sender_name',
-                        name: 'sender_name'
+                        data: 'doc_price',
+                        name: 'doc_price',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'DocCurrencyCode',
+                        name: 'DocCurrencyCode'
                     },
                     {
                         data: 'status_badge',
                         name: 'status_badge',
                         orderable: false,
                         searchable: false
+                    },
+                    {
+                        data: 'InvoiceDate',
+                        name: 'InvoiceDate'
                     },
                     {
                         data: 'actions',
@@ -141,6 +157,25 @@
                     $('.dataTables_length select').addClass('form-select form-select-sm').css('width', 'auto');
                 }
             });
+
+            $('#filterd').on('click', function () {
+                window.isGitmeyenFilterActive = true;
+                table.ajax.reload();
+            });
+
+
+            $('#filterBtn').on('click', function () {
+                window.isGitmeyenFilterActive = false;
+                table.ajax.reload();
+            });
+
+
+            $('#resetBtn').on('click', function () {
+                $('#start_date, #end_date').val('');
+                window.isGitmeyenFilterActive = false;
+                table.ajax.reload();
+            });
+
 
 
             $('#syncBtn').on('click', function() {
