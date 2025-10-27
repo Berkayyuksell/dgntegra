@@ -12,6 +12,8 @@ class trInvoiceHeader extends Model
 
 
 
+
+
     protected static function booted()
     {
         static::addGlobalScope('last_month', function (Builder $builder) {
