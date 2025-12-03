@@ -113,6 +113,8 @@ XML;
             "Content-Type: text/xml;charset=UTF-8",
             "SOAPAction: ''"
         ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 120); // 120 saniye timeout
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30); // 30 saniye bağlantı timeout
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         $response = curl_exec($ch);

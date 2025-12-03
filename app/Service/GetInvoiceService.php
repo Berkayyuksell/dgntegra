@@ -33,10 +33,14 @@ class GetInvoiceService{
         </soapenv:Envelope>
         XML;
 
-        $http=Http::withHeaders([
-            'Content-Type'=>'text/xml;charset=UTF-8',
-            'SOAPAction'=>'""'
-        ])->withOptions(['verify' => false])->withBody($xmlBodyContent,"text/xml")->post($url);
+        $http=Http::timeout(120) // 120 saniye timeout
+            ->withHeaders([
+                'Content-Type'=>'text/xml;charset=UTF-8',
+                'SOAPAction'=>'""'
+            ])
+            ->withOptions(['verify' => false])
+            ->withBody($xmlBodyContent,"text/xml")
+            ->post($url);
         $xml = simplexml_load_string($http->body());
         $xml->registerXPathNamespace('ns3', 'http://schemas.i2i.com/ei/wsdl');
         $result = $xml->xpath('//ns3:LoginResponse/SESSION_ID');

@@ -42,7 +42,6 @@ class InvoiceController extends Controller
     }
 
     public function indexArchive(){
-
         return view('invoices.archiveinvoices');
     }
 
@@ -53,80 +52,96 @@ class InvoiceController extends Controller
     }
 
     public function get_table_data(Request $request){
-        $data = trInvoiceHeader::leftJoin('invoices_outs as v', 'v.uuid', '=', 'trInvoiceHeader.InvoiceHeaderID')
-            ->where('trInvoiceHeader.IsReturn', '0')
-            ->where('trInvoiceHeader.TransTypeCode', 2)
-            ->where('trInvoiceHeader.InvoiceTypeCode', '1')
-            ->select(
-                'trInvoiceHeader.*',
-                DB::raw("CASE WHEN v.uuid IS NULL THEN 0 ELSE 1 END AS isInvoiceOkey")
-            )
-            ->with(['V3AllInvoices', 'V3OutInvoices']);
+        // view_e_invoices_out_panel kullanarak direkt veri çek
+        $query = DB::table('view_e_invoices_out_panel');
 
+        // Gitmeyen filtresi (status = 0)
         if ($request->has('isInvoiceOkey') && $request->isInvoiceOkey == '0') {
-            $data->whereNull('v.uuid');
+            $query->where('status', '0');
         }
+        
+        // Tarih filtresi - Default son 1 ay
         if (!empty($request->start_date) && !empty($request->end_date)) {
             $start = $request->start_date . ' 00:00:00';
             $end = $request->end_date . ' 23:59:59';
-            $data->whereBetween('trInvoiceHeader.InvoiceDate', [$start, $end]);
+            $query->whereBetween('InvoiceDate', [$start, $end]);
         } elseif (!empty($request->start_date)) {
-            $data->whereDate('trInvoiceHeader.InvoiceDate', '>=', $request->start_date);
+            $query->whereDate('InvoiceDate', '>=', $request->start_date);
         } elseif (!empty($request->end_date)) {
-            $data->whereDate('trInvoiceHeader.InvoiceDate', '<=', $request->end_date);
+            $query->whereDate('InvoiceDate', '<=', $request->end_date);
+        } else {
+            // Default: Son 1 ay
+            $query->whereRaw('InvoiceDate >= DATEADD(MONTH, -1, GETDATE())');
         }
 
-        return DataTables::of($data)
-            ->editColumn('doc_price',fn($row)=> number_format($row->V3AllInvoices->first()->Doc_PriceVI,2,',','.') ?? '')
-            ->addColumn('actions', fn($row) => '<a href="/invoice/'.$row->id.'" class="btn btn-sm btn-dark">Görüntüle</a>')
-            ->addColumn('status_badge', function ($row) {
-                $color = $row->isInvoiceOkey === '1' ? 'success' : 'danger';
-                return '<span class="badge bg-' . $color . '">' . e($row->isInvoiceOkey ? 'Düşmüş' : 'E-Doganda Yok') . '</span>';
-            })
-            ->addColumn('customers',fn($row)=>$row->customer ?? '')
-            ->rawColumns(['status_badge', 'actions'])
-            ->make(true);
+        // Sıralama ve limit
+        $query->orderBy('InvoiceDate', 'desc')
+              ->limit(5000);
+
+        // Tabulator için JSON formatı
+        $results = $query->get()->map(function($row) {
+            return [
+                'id' => $row->InvoiceHeaderID,
+                'InvoiceNumber' => $row->InvoiceNumber,
+                'EInvoiceNumber' => $row->EInvoiceNumber,
+                'customer' => $row->CurrAccDescription ?? '',
+                'doc_price' => number_format($row->price ?? 0, 2, ',', '.'),
+                'DocCurrencyCode' => 'TRY',
+                'isInvoiceOkey' => $row->status,
+                'status' => $row->status == '1' ? 'Düşmüş' : 'E-Doganda Yok',
+                'status_color' => $row->status == '1' ? 'success' : 'danger',
+                'InvoiceDate' => $row->InvoiceDate,
+                'CompanyCode' => '1',
+            ];
+        });
+
+        return response()->json($results);
     }
 
 
 
     public function get_table_data_in(Request $request){
-        $data = InvoicesIn::leftjoin('e_InboxInvoiceHeader as v', 'v.UUID', '=', 'invoices_ins.uuid')
-            ->select(
-                'invoices_ins.*',
-                DB::raw("CASE WHEN v.UUID IS NULL THEN 0 ELSE 1 END AS isInvoiceOkey")
-            )
-        ->with('V3InboxInvoiceHeader');
+        // view_e_invoices_in_panel kullanarak direkt veri çek
+        $query = DB::table('view_e_invoices_in_panel');
 
+        // Gitmeyen filtresi (status = 0)
         if ($request->has('isInvoiceOkey') && $request->isInvoiceOkey == '0') {
-            $data->whereNull('v.UUID');
+            $query->where('status', '0');
         }
+        
+        // Tarih filtresi - Default son 1 ay
         if (!empty($request->start_date) && !empty($request->end_date)) {
             $start = $request->start_date . ' 00:00:00';
             $end = $request->end_date . ' 23:59:59';
-            $data->whereBetween('invoices_ins.cdate', [$start, $end]);
+            $query->whereBetween('IssueDate', [$start, $end]);
         } elseif (!empty($request->start_date)) {
-            $data->whereDate('invoices_ins.cdate', '>=', $request->start_date);
+            $query->whereDate('IssueDate', '>=', $request->start_date);
         } elseif (!empty($request->end_date)) {
-            $data->whereDate('invoices_ins.cdate', '<=', $request->end_date);
+            $query->whereDate('IssueDate', '<=', $request->end_date);
+        } else {
+            // Default: Son 1 ay
+            $query->whereRaw('IssueDate >= DATEADD(MONTH, -1, GETDATE())');
         }
 
+        // Sıralama ve limit
+        $query->orderBy('IssueDate', 'desc')
+              ->limit(5000);
 
-        return DataTables::of($data)
-            ->addColumn('actions', fn($row) => '<a href="/invoice/'.$row->id.'" class="btn btn-sm btn-dark">Görüntüle</a>')
-            ->addColumn('status_badge', function ($row) {
-                $color = $row->isInvoiceOkey === '1' ? 'success' : 'danger';
-                return '<span class="badge bg-' . $color . '">' . e($row->isInvoiceOkey ? 'Düşmüş' : 'E-Doganda Yok') . '</span>';
-            })
-            ->editColumn('cdate',fn($row)=> $row->cdate ? \Carbon\Carbon::parse($row->cdate)->format('Y-m-d')
-                : '')
-            ->addColumn('customers',fn($row)=>$row->V3OutInvoices->customer ?? '')
-            ->editColumn('payable_amount',fn($row)=> number_format($row->payable_amount,2,',','.') ?? '')
-            ->rawColumns(['status_badge', 'actions'])
-            ->make(true);
+        // Tabulator için JSON formatı
+        $results = $query->get()->map(function($row) {
+            return [
+                'id' => $row->UUID,
+                'external_id' => $row->ID ?? '',
+                'supplier' => $row->supplier ?? '',
+                'payable_amount' => number_format($row->payable_amount ?? 0, 2, ',', '.'),
+                'isInvoiceOkey' => $row->status,
+                'status' => $row->status == '1' ? 'Düşmüş' : 'Nebimde Yok',
+                'status_color' => $row->status == '1' ? 'success' : 'danger',
+                'cdate' => $row->IssueDate ? \Carbon\Carbon::parse($row->IssueDate)->format('Y-m-d') : '',
+            ];
+        });
 
-
-
+        return response()->json($results);
     }
 
 
@@ -134,41 +149,49 @@ class InvoiceController extends Controller
 
 
     public function get_table_data_archive(Request $request){
-        $data = trInvoiceHeader::leftJoin('e_archive_invoices_outs as v', 'v.uuid', '=', 'trInvoiceHeader.InvoiceHeaderID')
-            ->where('trInvoiceHeader.IsReturn', '0')
-            ->where('trInvoiceHeader.TransTypeCode', 2)
-            ->where('trInvoiceHeader.InvoiceTypeCode', '2')
-            ->select(
-                'trInvoiceHeader.*',
-                DB::raw("CASE WHEN v.uuid IS NULL THEN 0 ELSE 1 END AS isInvoiceOkey")
-            )
-            ->with(['V3AllInvoices', 'V3OutInvoices']);
+        // view_e_archive_panel kullanarak direkt veri çek
+        $query = DB::table('view_e_archive_panel');
 
+        // Gitmeyen filtresi (status = 0)
         if ($request->has('isInvoiceOkey') && $request->isInvoiceOkey == '0') {
-            $data->whereNull('v.uuid');
+            $query->where('status', '0');
         }
+        
+        // Tarih filtresi - Default son 1 ay
         if (!empty($request->start_date) && !empty($request->end_date)) {
             $start = $request->start_date . ' 00:00:00';
             $end = $request->end_date . ' 23:59:59';
-            $data->whereBetween('trInvoiceHeader.InvoiceDate', [$start, $end]);
+            $query->whereBetween('InvoiceDate', [$start, $end]);
         } elseif (!empty($request->start_date)) {
-            $data->whereDate('trInvoiceHeader.InvoiceDate', '>=', $request->start_date);
+            $query->whereDate('InvoiceDate', '>=', $request->start_date);
         } elseif (!empty($request->end_date)) {
-            $data->whereDate('trInvoiceHeader.InvoiceDate', '<=', $request->end_date);
+            $query->whereDate('InvoiceDate', '<=', $request->end_date);
+        } else {
+            // Default: Son 1 ay
+            $query->whereRaw('InvoiceDate >= DATEADD(MONTH, -1, GETDATE())');
         }
 
-        return DataTables::of($data)
-            ->editColumn('doc_price',fn($row)=> number_format($row->V3AllInvoices->first()->Doc_PriceVI,2,'.',',') ?? '')
-            ->addColumn('actions', fn($row) => '<a href="/invoice/'.$row->id.'" class="btn btn-sm btn-dark">Görüntüle</a>')
-            ->addColumn('status_badge', function ($row) {
-                $color = $row->isInvoiceOkey === '1' ? 'success' : 'danger';
-                return '<span class="badge bg-' . $color . '">' . e($row->isInvoiceOkey ? 'Düşmüş' : 'E-Doganda Yok') . '</span>';
-            })
-            ->addColumn('customers',fn($row)=>$row->V3OutInvoices->customer ?? '')
-            ->rawColumns(['status_badge', 'actions'])
-            ->make(true);
+        // Sıralama ve limit
+        $query->orderBy('InvoiceDate', 'desc')
+              ->limit(5000);
 
+        // Tabulator için JSON formatı
+        $results = $query->get()->map(function($row) {
+            return [
+                'id' => $row->InvoiceHeaderID,
+                'InvoiceNumber' => $row->InvoiceNumber,
+                'EInvoiceNumber' => $row->EInvoiceNumber,
+                'customer' => $row->CurrAccDescription ?? '',
+                'doc_price' => number_format($row->price ?? 0, 2, '.', ','),
+                'DocCurrencyCode' => 'TRY',
+                'isInvoiceOkey' => $row->status,
+                'status' => $row->status == '1' ? 'Düşmüş' : 'E-Doganda Yok',
+                'status_color' => $row->status == '1' ? 'success' : 'danger',
+                'InvoiceDate' => $row->InvoiceDate,
+            ];
+        });
 
+        return response()->json($results);
     }
 
 
@@ -178,36 +201,81 @@ class InvoiceController extends Controller
     public static function SyncInvoices()
     {
         $users = Helpers::getUsers();
+        $totalSynced = 0;
+        
         foreach ($users as $user) {
-            InvoiceController::getInvoice($user['UserName'],$user['Password'],$user['CompanyCode']);
+            try {
+                \Log::info("Senkronizasyon başlatılıyor: " . $user['CompanyCode']);
+                $count = InvoiceController::getInvoice($user['UserName'],$user['Password'],$user['CompanyCode']);
+                $totalSynced += $count;
+                \Log::info("Senkronizasyon bitti: {$user['CompanyCode']} - {$count} kayıt");
+            } catch (\Exception $e) {
+                \Log::error("Şirket senkronizasyon hatası {$user['CompanyCode']}: " . $e->getMessage());
+                // Hata olsa bile diğer şirketlere devam et
+                continue;
+            }
         }
+        
+        \Log::info("Toplam senkronizasyon tamamlandı: {$totalSynced} kayıt");
+        return $totalSynced;
     }
 
 
     public static function getInvoice($username,$password,$companyCode){
+        try {
+            $session = AuthService::GetAuthToken($username,$password);
+            
+            if (!$session) {
+                \Log::error("Login başarısız: {$companyCode}");
+                return 0;
+            }
 
+            $dates = InvoiceController::getLastMonth();
+            $saveCount = 0;
 
+            foreach($dates as $date){
+                try {
+                    // Gelen faturalar
+                    try {
+                        $dataInvoiceIn = GetInvoiceService::GetInvoice($session,$date,$date,'IN');
+                        $saveCount += GetInvoiceService::saveDb($dataInvoiceIn,'IN',$companyCode);
+                    } catch (\Exception $e) {
+                        \Log::warning("Gelen fatura çekme hatası [{$date}] {$companyCode}: " . $e->getMessage());
+                    }
 
-        $session = AuthService::GetAuthToken($username,$password);
-        $dates = InvoiceController::getLastMonth();
-        $saveCount = 0;
+                    // Giden faturalar
+                    try {
+                        $dataInvoiceOut = GetInvoiceService::GetInvoice($session,$date,$date,'OUT');
+                        $saveCount += GetInvoiceService::saveDb($dataInvoiceOut,'OUT',$companyCode);
+                    } catch (\Exception $e) {
+                        \Log::warning("Giden fatura çekme hatası [{$date}] {$companyCode}: " . $e->getMessage());
+                    }
 
+                    // E-Arşiv faturalar
+                    try {
+                        $dataArchiveInvoice = GetArchiveService::getInvoice($session,$date,$date);
+                        $saveCount += GetArchiveService::saveDb($dataArchiveInvoice,$companyCode);
+                    } catch (\Exception $e) {
+                        \Log::warning("E-Arşiv fatura çekme hatası [{$date}] {$companyCode}: " . $e->getMessage());
+                    }
 
-        foreach($dates as $date){
-            $dataInvoiceIn = GetInvoiceService::GetInvoice($session,$date,$date,'IN');
-            $dataInvoiceOut = GetInvoiceService::GetInvoice($session,$date,$date,'OUT');
-            $dataArchiveInvoice = GetArchiveService::getInvoice($session,$date,$date);
-            $saveCount = GetInvoiceService::saveDb($dataInvoiceIn,'IN',$companyCode);
-            $saveCount += getInvoiceService::saveDb($dataInvoiceOut,'OUT',$companyCode);
-            $saveCount += getArchiveService::saveDb($dataArchiveInvoice,$companyCode);
-        }
+                } catch (\Exception $e) {
+                    \Log::warning("Tarih işleme hatası [{$date}] {$companyCode}: " . $e->getMessage());
+                    continue; // Bu tarihi atla, diğer tarihlere devam et
+                }
+            }
 
-        SyncLog::create([
+            SyncLog::create([
                 'company_code' => $companyCode,
-            ]
-        );
+            ]);
 
-        return $saveCount;
+            \Log::info("Senkronizasyon tamamlandı: {$companyCode} - {$saveCount} kayıt");
+            return $saveCount;
+
+        } catch (\Exception $e) {
+            \Log::error("Genel senkronizasyon hatası {$companyCode}: " . $e->getMessage());
+            return 0;
+        }
     }
 
 
@@ -215,7 +283,8 @@ class InvoiceController extends Controller
 
     public static function getLastMonth(){
         $endDate = Carbon::today();
-        $startDate = $endDate->copy()->subMonth();
+        //$startDate = $endDate->copy()->subMonth();
+        $startDate = $endDate->copy()->subDays(2); // Son 2 gün
         $dates = [];
 
         $currentDate = $startDate->copy();

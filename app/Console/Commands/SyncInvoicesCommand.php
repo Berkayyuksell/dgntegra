@@ -27,12 +27,24 @@ class SyncInvoicesCommand extends Command
     public function handle()
     {
         try {
-
             $this->info('Senkronizasyon başladı...');
-            InvoiceController::SyncInvoices();
+            $startTime = now();
+            
+            $totalRecords = InvoiceController::SyncInvoices();
+            
+            $endTime = now();
+            $duration = $startTime->diffInSeconds($endTime);
+            
+            $this->info("Senkronizasyon tamamlandı!");
+            $this->info("Toplam kayıt: {$totalRecords}");
+            $this->info("Süre: {$duration} saniye");
+            
+            \Log::info("Senkronizasyon başarılı: {$totalRecords} kayıt, {$duration} saniye");
+            
         } catch (\Throwable $e) {
             \Log::error('SyncInvoicesCommand hatası: ' . $e->getMessage());
             $this->error('Hata: ' . $e->getMessage());
+            $this->error('Senkronizasyon devam ediyor, bazı kayıtlar atlanmış olabilir.');
         }
     }
 

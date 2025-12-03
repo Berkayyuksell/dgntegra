@@ -22,4 +22,6 @@ Route::get('invoices/archive/data',[InvoiceController::class,'get_table_data_arc
 
 Route::get('invoices/sync',[InvoiceController::class,'testtriggerSync'])->name('invoices.sync');
 
+// Fatura HTML görüntüleme
+Route::get('/invoice/html/{uuid}', [InvoiceController::class, 'showHtml'])->name('invoice.html');
 

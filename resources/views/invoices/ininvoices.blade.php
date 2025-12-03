@@ -20,22 +20,17 @@
                 </div>
 
             </div>
-        </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0" id="invoiceTable">
-                        <thead class="bg-light">
-                        <tr>
-                            <th class="border-0 py-3 ps-4">ID</th>
-                            <th class="border-0 py-3">Tedarikçi</th>
-                            <th class="border-0 py-3">Tutar</th>
-                            <th class="border-0 py-3">Durum</th>
-                            <th class="border-0 py-4 "style="width: 125px;">Tarih</th>
-                            <th class="border-0 py-3 pe-4 text-end">İşlemler</th>
-                        </tr>
-                        </thead>
-                    </table>
+        
+            <div class="card-body p-0 position-relative">
+                <div id="loadingOverlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Yükleniyor...</span>
+                        </div>
+                        <p class="mt-2 fw-bold">Veriler yükleniyor...</p>
+                    </div>
                 </div>
+                <div id="invoiceTable"></div>
             </div>
         </div>
     </div>
@@ -43,100 +38,87 @@
 
 
 @section('scripts')
+    <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+    
     <script>
+        let table;
+        let isGitmeyenFilterActive = false;
 
-        $(function() {
-            window.isGitmeyenFilterActive = false;
-            var table = $('#invoiceTable').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: {
-                    url : '{{ route("invoices.index_in.data") }}',
-                    data: function(d){
-                        d.start_date = $('#start_date').val();
-                        d.end_date = $('#end_date').val();
-                        d.isInvoiceOkey = window.isGitmeyenFilterActive ? 0 : '';
-                    }
+        function loadData() {
+            const params = new URLSearchParams({
+                start_date: $('#start_date').val() || '',
+                end_date: $('#end_date').val() || '',
+                isInvoiceOkey: isGitmeyenFilterActive ? '0' : ''
+            });
+
+            $.ajax({
+                url: '{{ route("invoices.index_in.data") }}?' + params.toString(),
+                method: 'GET',
+                beforeSend: function() {
+                    $('#loadingOverlay').show();
                 },
-                columns: [
-                    {
-                        data: 'external_id',
-                        name: 'external_id',
-                        className: 'ps-4 text-muted'
-                    },
-                    {
-                        data: 'supplier',
-                        name: 'supplier'
-                    },
-                    {
-                        data: 'payable_amount',
-                        name: 'payable_amount'
-                    },
-                    {
-                        data: 'status_badge',
-                        name: 'status_badge',
-                        orderable: false,
-                        searchable: false
-                    },
-                    {
-                        data: 'cdate',
-                        name: 'cdate',
-                        className: 'fw-bold text-dark'
-                    },
-                    {
-                        data: 'actions',
-                        name: 'actions',
-                        orderable: false,
-                        searchable: false,
-                        className: 'pe-4 text-end'
-                    }
-                ],
-                pageLength: 15,
-                lengthMenu: [[15, 25, 50, 100], [15, 25, 50, 100]],
-                order: [[0, 'desc']],
-                language: {
-                    url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json",
-                    search: "",
-                    searchPlaceholder: "Ara..."
+                success: function(data) {
+                    table.setData(data);
                 },
-                dom: '<"row px-4 pt-3 pb-2"<"col-sm-6"l><"col-sm-6 text-end"f>>rt<"row px-4 py-3 border-top"<"col-sm-6 text-muted small"i><"col-sm-6"p>>',
-                initComplete: function() {
-                    $('.dataTables_filter input').addClass('form-control form-control-sm').css('width', '250px');
-                    $('.dataTables_length select').addClass('form-select form-select-sm').css('width', 'auto');
+                error: function() {
+                    alert('Veri yüklenirken hata oluştu');
+                },
+                complete: function() {
+                    $('#loadingOverlay').hide();
                 }
+            });
+        }
+
+        $(document).ready(function() {
+            table = new Tabulator("#invoiceTable", {
+                data: [],
+                layout: "fitColumns",
+                height: "600px",
+                virtualDom: true,
+                pagination: true,
+                paginationSize: 50,
+                paginationSizeSelector: [25, 50, 100, 200],
+                placeholder: "Tabloda gösterilecek veri yok",
+                columns: [
+                    {title: "ID", field: "external_id", sorter: "string", headerFilter: "input"},
+                    {title: "Tedarikçi", field: "supplier", sorter: "string", headerFilter: "input"},
+                    {title: "Tutar", field: "payable_amount", sorter: "string", hozAlign: "right"},
+                    {
+                        title: "Durum", 
+                        field: "status", 
+                        sorter: "string",
+                        formatter: function(cell) {
+                            const row = cell.getRow().getData();
+                            const color = row.status_color;
+                            return `<span class="badge bg-${color}">${cell.getValue()}</span>`;
+                        }
+                    },
+                    {title: "Tarih", field: "cdate", sorter: "date"}
+                ],
+            });
+
+            loadData();
+
+            $('#filterd2').on('click', function () {
+                isGitmeyenFilterActive = 2;
+                loadData();
             });
 
             $('#filterd').on('click', function () {
-                window.isGitmeyenFilterActive = true;
-                table.ajax.reload();
+                isGitmeyenFilterActive = true;
+                loadData();
             });
-
 
             $('#filterBtn').on('click', function () {
-                window.isGitmeyenFilterActive = false;
-                table.ajax.reload();
+                isGitmeyenFilterActive = false;
+                loadData();
             });
-
 
             $('#resetBtn').on('click', function () {
                 $('#start_date, #end_date').val('');
-                window.isGitmeyenFilterActive = false;
-                table.ajax.reload();
-            });
-
-
-            $('#syncBtn').on('click', function() {
-                const $btn = $(this);
-                const originalHtml = $btn.html();
-
-                $btn.html('<span class="spinner-border spinner-border-sm me-2" role="status"></span>Senkronize Ediliyor...');
-                $btn.prop('disabled', true);
-
-                setTimeout(function() {
-                    $('#invoiceTable').DataTable().ajax.reload();
-                    $btn.html(originalHtml);
-                    $btn.prop('disabled', false);
-                }, 1500);
+                isGitmeyenFilterActive = false;
+                loadData();
             });
         });
     </script>
