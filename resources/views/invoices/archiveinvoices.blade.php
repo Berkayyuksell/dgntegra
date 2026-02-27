@@ -14,7 +14,7 @@
 
                     <div class="d-flex align-items-center gap-2">
                         {{-- TARİH FİLTRELERİ (Son 1 ay, bugün hariç) --}}
-                        <input type="date" id="start_date" class="form-control form-control-sm" placeholder="Başlangıç" value="{{ \Carbon\Carbon::now()->subDay()->subMonth()->format('Y-m-d') }}" />
+                        <input type="date" id="start_date" class="form-control form-control-sm" placeholder="Başlangıç" value="{{ \Carbon\Carbon::now()->subMonth()->format('Y-m-d') }}" />
                         <input type="date" id="end_date" class="form-control form-control-sm" placeholder="Bitiş" value="{{ \Carbon\Carbon::now()->subDay()->format('Y-m-d') }}" />
                         <button id="filterd" class="btn btn-sm btn-danger">Gitmeyen </button>
                         <button id="filterBtn" class="btn btn-sm btn-dark">Filtrele</button>
@@ -130,8 +130,8 @@
             $('#resetBtn').on('click', function () {
                 const endDate = new Date();
                 endDate.setDate(endDate.getDate() - 1); // dün
-                const startDate = new Date(endDate.getTime());
-                startDate.setMonth(startDate.getMonth() - 1);
+                const startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 1); // 1 ay önce (bugünün günü)
 
                 $('#start_date').val(startDate.toISOString().split('T')[0]);
                 $('#end_date').val(endDate.toISOString().split('T')[0]);
