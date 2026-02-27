@@ -13,13 +13,22 @@
                     </div>
 
                     <div class="d-flex align-items-center gap-2">
-                        {{-- TARİH FİLTRELERİ --}}
-                        <input type="date" id="start_date" class="form-control form-control-sm" placeholder="Başlangıç" value="{{ \Carbon\Carbon::now()->subMonth()->format('Y-m-d') }}" />
-                        <input type="date" id="end_date" class="form-control form-control-sm" placeholder="Bitiş" value="{{ \Carbon\Carbon::now()->format('Y-m-d') }}" />
+                        {{-- TARİH FİLTRELERİ (Son 1 ay, bugün hariç) --}}
+                        <input type="date" id="start_date" class="form-control form-control-sm" placeholder="Başlangıç" value="{{ \Carbon\Carbon::now()->subDay()->subMonth()->format('Y-m-d') }}" />
+                        <input type="date" id="end_date" class="form-control form-control-sm" placeholder="Bitiş" value="{{ \Carbon\Carbon::now()->subDay()->format('Y-m-d') }}" />
                         <button id="filterd" class="btn btn-sm btn-danger">Gitmeyen </button>
                         <button id="filterBtn" class="btn btn-sm btn-dark">Filtrele</button>
                         <button id="resetBtn" class="btn btn-sm btn-secondary">Temizle</button>
                     </div>
+                </div>
+            </div>
+
+            {{-- AYLIK İSTATİSTİK BARI --}}
+            <div class="d-flex align-items-center gap-4 px-4 py-3 border-bottom bg-white" style="font-size:.85rem;">
+                <span class="text-muted">{{ \Carbon\Carbon::now()->startOfMonth()->format('d.m.Y') }} — {{ \Carbon\Carbon::now()->format('d.m.Y') }}</span>
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">Toplam:</span>
+                    <span class="fw-bold">{{ number_format((float)($stats->toplam ?? 0), 2, ',', '.') }} ₺</span>
                 </div>
             </div>
 
@@ -45,7 +54,7 @@
     
     <script>
         let table;
-        let isGitmeyenFilterActive = false;
+        let isGitmeyenFilterActive = true;
 
         function loadData() {
             const params = new URLSearchParams({
@@ -83,6 +92,7 @@
                 paginationSizeSelector: [25, 50, 100, 200],
                 placeholder: "Tabloda gösterilecek veri yok",
                 columns: [
+                    {title: "#", formatter: "rownum", hozAlign: "center", width: 60},
                     {title: "Ref no", field: "InvoiceNumber", sorter: "string", headerFilter: "input"},
                     {title: "Fatura Numara", field: "EInvoiceNumber", sorter: "string", headerFilter: "input"},
                     {title: "Müşteri", field: "customer", sorter: "string", headerFilter: "input"},
@@ -102,27 +112,31 @@
                 ],
             });
 
+            $('#filterd').addClass('active');
             loadData();
 
             $('#filterd').on('click', function () {
                 isGitmeyenFilterActive = true;
+                $('#filterd').addClass('active');
                 loadData();
             });
 
             $('#filterBtn').on('click', function () {
                 isGitmeyenFilterActive = false;
+                $('#filterd').removeClass('active');
                 loadData();
             });
 
             $('#resetBtn').on('click', function () {
-                // Son 1 aya dön
                 const endDate = new Date();
-                const startDate = new Date();
+                endDate.setDate(endDate.getDate() - 1); // dün
+                const startDate = new Date(endDate.getTime());
                 startDate.setMonth(startDate.getMonth() - 1);
-                
+
                 $('#start_date').val(startDate.toISOString().split('T')[0]);
                 $('#end_date').val(endDate.toISOString().split('T')[0]);
                 isGitmeyenFilterActive = false;
+                $('#filterd').removeClass('active');
                 loadData();
             });
         });

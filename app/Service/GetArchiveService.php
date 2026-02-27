@@ -27,7 +27,7 @@ class GetArchiveService {
         XML;
 
 
-        $http=Http::timeout(120) // 120 saniye timeout
+        $http=Http::timeout(240) // 240 saniye timeout (4 dk)
             ->withHeaders([
                 'Content-Type'=>'text/xml;charset=UTF-8',
                 'SOAPAction'=>'""'

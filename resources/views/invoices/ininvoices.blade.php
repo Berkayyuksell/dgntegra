@@ -21,7 +21,32 @@
 
             </div>
         
-            <div class="card-body p-0 position-relative">
+                {{-- AYLIK İSTATİSTİK BARI --}}
+            <div class="d-flex align-items-center gap-4 px-4 py-3 border-bottom bg-white" style="font-size:.85rem;">
+                <span class="text-muted">{{ \Carbon\Carbon::now()->startOfMonth()->format('d.m.Y') }} — {{ \Carbon\Carbon::now()->format('d.m.Y') }}</span>
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">Fatura:</span>
+                    <span class="fw-bold">{{ number_format($stats->total ?? 0) }} adet</span>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">Toplam:</span>
+                    <span class="fw-bold">{{ number_format((float)($stats->toplam ?? 0), 2, ',', '.') }} ₺</span>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">Vergisiz:</span>
+                    <span class="fw-bold text-success">{{ number_format((float)($stats->vergisiz ?? 0), 2, ',', '.') }} ₺</span>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">Vergili (KDV dahil):</span>
+                    <span class="fw-bold text-primary">{{ number_format((float)($stats->vergili ?? 0), 2, ',', '.') }} ₺</span>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">KDV:</span>
+                    <span class="fw-bold text-warning">{{ number_format((float)(($stats->vergili ?? 0) - ($stats->vergisiz ?? 0)), 2, ',', '.') }} ₺</span>
+                </div>
+            </div>
+
+        <div class="card-body p-0 position-relative">
                 <div id="loadingOverlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;">
                     <div class="text-center">
                         <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
@@ -43,7 +68,7 @@
     
     <script>
         let table;
-        let isGitmeyenFilterActive = false;
+        let isGitmeyenFilterActive = true;
 
         function loadData() {
             const params = new URLSearchParams({
@@ -81,6 +106,7 @@
                 paginationSizeSelector: [25, 50, 100, 200],
                 placeholder: "Tabloda gösterilecek veri yok",
                 columns: [
+                    {title: "#", formatter: "rownum", hozAlign: "center", width: 60},
                     {title: "ID", field: "external_id", sorter: "string", headerFilter: "input"},
                     {title: "Tedarikçi", field: "supplier", sorter: "string", headerFilter: "input"},
                     {title: "Tutar", field: "payable_amount", sorter: "string", hozAlign: "right"},
@@ -98,26 +124,33 @@
                 ],
             });
 
+            $('#filterd').addClass('active');
             loadData();
 
             $('#filterd2').on('click', function () {
                 isGitmeyenFilterActive = 2;
+                $('#filterd').removeClass('active');
+                $('#filterd2').addClass('active');
                 loadData();
             });
 
             $('#filterd').on('click', function () {
                 isGitmeyenFilterActive = true;
+                $('#filterd').addClass('active');
+                $('#filterd2').removeClass('active');
                 loadData();
             });
 
             $('#filterBtn').on('click', function () {
                 isGitmeyenFilterActive = false;
+                $('#filterd, #filterd2').removeClass('active');
                 loadData();
             });
 
             $('#resetBtn').on('click', function () {
                 $('#start_date, #end_date').val('');
                 isGitmeyenFilterActive = false;
+                $('#filterd, #filterd2').removeClass('active');
                 loadData();
             });
         });

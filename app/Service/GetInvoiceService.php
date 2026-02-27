@@ -62,27 +62,46 @@ class GetInvoiceService{
 
     }
 
-    public static function saveDb(array $datas,$direction,$companyCode)
-{
-    if($direction == 'IN'){
-        $modelClass =  \App\Models\InvoicesIn::class;
-    }else{
-        $modelClass =  \App\Models\InvoicesOut::class;
-    }
+    public static function saveDb(array $datas, $direction, $companyCode)
+    {
+        $modelClass = $direction === 'IN'
+            ? \App\Models\InvoicesIn::class
+            : \App\Models\InvoicesOut::class;
 
+        if (!isset($datas[0]['INVOICE'])) {
+            return 0;
+        }
 
-    if (!isset($datas[0]['INVOICE'])) {
-        return 0; // kayıt yok
-    }
+        $invoices = $datas[0]['INVOICE'];
 
-    $count = 0;
+        if (isset($invoices['HEADER']) || isset($invoices['@attributes'])) {
+            $invoices = [$invoices];
+        }
 
-    foreach ($datas[0]['INVOICE'] as $invoice) {
-        $header = $invoice['HEADER'] ?? [];
-        if (empty($header)) continue;
+        $safeString = function ($value) {
+            if (is_array($value)) {
+                if (isset($value[0]) && !is_array($value[0])) return (string) $value[0];
+                foreach ($value as $k => $v) {
+                    if ($k !== '@attributes' && !is_array($v)) return (string) $v;
+                }
+                return null;
+            }
+            return $value;
+        };
 
-        // Güvenli tarih parse
-        $safeParseDate = function ($value) {
+        $safeFloat = function ($value) {
+            if (is_array($value)) {
+                if (isset($value[0]) && is_numeric($value[0])) return (float) $value[0];
+                foreach ($value as $k => $v) {
+                    if ($k !== '@attributes' && is_numeric($v)) return (float) $v;
+                }
+                return null;
+            }
+            return is_numeric($value) ? (float) $value : null;
+        };
+
+        $safeParseDate = function ($value) use ($safeString) {
+            $value = $safeString($value);
             if (empty($value) || $value === '0000-00-00 00:00:00') {
                 return null;
             }
@@ -93,52 +112,56 @@ class GetInvoiceService{
             }
         };
 
-        // Güvenli float parse
-        $safeFloat = function ($value) {
-            return is_numeric($value) ? (float)$value : null;
-        };
-        $dataToSave = [
-            'external_id' => $invoice['@attributes']['ID'] ?? null,
-            'list_id' => $invoice['@attributes']['LIST_ID'] ?? null,
-            'uuid' => $invoice['@attributes']['UUID'] ?? null,
-            'sender' => $header['SENDER'] ?? null,
-            'receiver' => $header['RECEIVER'] ?? null,
-            'supplier' => $header['SUPPLIER'] ?? null,
-            'customer' => $header['CUSTOMER'] ?? null,
-            'issue_date' => $safeParseDate($header['ISSUE_DATE'] ?? null),
-            'payable_amount' => $safeFloat($header['PAYABLE_AMOUNT'] ?? null),
-            'from_address' => $header['FROM'] ?? null,
-            'to_address' => $header['TO'] ?? null,
-            'profile_id' => $header['PROFILEID'] ?? null,
-            'invoice_type_code' => $header['INVOICE_TYPE_CODE'] ?? null,
-            'status' => $header['STATUS'] ?? null,
-            'status_description' => $header['STATUS_DESCRIPTION'] ?? null,
-            'gib_status_code' => $header['GIB_STATUS_CODE'] ?? null,
-            'gib_status_description' => $header['GIB_STATUS_DESCRIPTION'] ?? null,
-            'cdate' => $safeParseDate($header['CDATE'] ?? null),
-            'envelope_identifier' => $header['ENVELOPE_IDENTIFIER'] ?? null,
-            'status_code' => $header['STATUS_CODE'] ?? null,
-            'line_extension_amount' => $safeFloat($header['LINE_EXTENSION_AMOUNT'] ?? null),
-            'tax_exclusive_total_amount' => $safeFloat($header['TAX_EXCLUSIVE_TOTAL_AMOUNT'] ?? null),
-            'tax_inclusive_total_amount' => $safeFloat($header['TAX_INCLUSIVE_TOTAL_AMOUNT'] ?? null),
-            'allowance_total_amount' => 100,
-            'company_code' => $companyCode,
-        ];
+        $count = 0;
 
+        foreach ($invoices as $invoice) {
+            if (!isset($invoice['HEADER'])) continue;
 
+            try {
+                $header = $invoice['HEADER'];
 
+                $dataToSave = [
+                    'external_id'              => $safeString($invoice['@attributes']['ID'] ?? null),
+                    'list_id'                  => $safeString($invoice['@attributes']['LIST_ID'] ?? null),
+                    'uuid'                     => $safeString($invoice['@attributes']['UUID'] ?? null),
+                    'sender'                   => $safeString($header['SENDER'] ?? null),
+                    'receiver'                 => $safeString($header['RECEIVER'] ?? null),
+                    'supplier'                 => $safeString($header['SUPPLIER'] ?? null),
+                    'customer'                 => $safeString($header['CUSTOMER'] ?? null),
+                    'issue_date'               => $safeParseDate($header['ISSUE_DATE'] ?? null),
+                    'payable_amount'           => $safeFloat($header['PAYABLE_AMOUNT'] ?? null),
+                    'from_address'             => $safeString($header['FROM'] ?? null),
+                    'to_address'               => $safeString($header['TO'] ?? null),
+                    'profile_id'               => $safeString($header['PROFILEID'] ?? null),
+                    'invoice_type_code'        => $safeString($header['INVOICE_TYPE_CODE'] ?? null),
+                    'status'                   => $safeString($header['STATUS'] ?? null),
+                    'status_description'       => $safeString($header['STATUS_DESCRIPTION'] ?? null),
+                    'gib_status_code'          => $safeString($header['GIB_STATUS_CODE'] ?? null),
+                    'gib_status_description'   => $safeString($header['GIB_STATUS_DESCRIPTION'] ?? null),
+                    'cdate'                    => $safeParseDate($header['CDATE'] ?? null),
+                    'envelope_identifier'      => $safeString($header['ENVELOPE_IDENTIFIER'] ?? null),
+                    'status_code'              => $safeString($header['STATUS_CODE'] ?? null),
+                    'line_extension_amount'     => $safeFloat($header['LINE_EXTENSION_AMOUNT'] ?? null),
+                    'tax_exclusive_total_amount'=> $safeFloat($header['TAX_EXCLUSIVE_TOTAL_AMOUNT'] ?? null),
+                    'tax_inclusive_total_amount'=> $safeFloat($header['TAX_INCLUSIVE_TOTAL_AMOUNT'] ?? null),
+                    'allowance_total_amount'   => 100,
+                    'company_code'             => $companyCode,
+                ];
 
+                $modelClass::updateOrCreate(
+                    ['uuid' => $dataToSave['uuid']],
+                    $dataToSave
+                );
 
-        $modelClass::updateOrCreate(
-            ['uuid' => $dataToSave['uuid']],
-            $dataToSave
-        );
+                $count++;
+            } catch (\Exception $e) {
+                \Log::warning("Fatura kayıt hatası [{$direction}] UUID:" . ($invoice['@attributes']['UUID'] ?? '?') . " - " . $e->getMessage());
+                continue;
+            }
+        }
 
-        $count++;
+        return $count;
     }
-
-    return $count; // Kaç kayıt kaydedildi
-}
 
 
 

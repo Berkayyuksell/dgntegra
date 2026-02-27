@@ -32,17 +32,75 @@ class InvoiceController extends Controller
     }
 
     public function index(){
-
-        return view('invoices.index');
+        $start = Carbon::now()->startOfMonth();
+        $end   = Carbon::now()->endOfDay();
+        $stats = InvoicesOut::withoutGlobalScopes()
+            ->whereBetween('issue_date', [$start, $end])
+            ->selectRaw("COUNT(*) as total, SUM(payable_amount) as toplam, SUM(tax_inclusive_total_amount) as vergili, SUM(tax_exclusive_total_amount) as vergisiz")
+            ->first();
+        return view('invoices.index', compact('stats'));
     }
 
     public function indexIn(){
-
-        return view('invoices.ininvoices');
+        $start = Carbon::now()->startOfMonth();
+        $end   = Carbon::now()->endOfDay();
+        $stats = InvoicesIn::withoutGlobalScopes()
+            ->whereBetween('issue_date', [$start, $end])
+            ->selectRaw("COUNT(*) as total, SUM(payable_amount) as toplam, SUM(tax_inclusive_total_amount) as vergili, SUM(tax_exclusive_total_amount) as vergisiz")
+            ->first();
+        return view('invoices.ininvoices', compact('stats'));
     }
 
     public function indexArchive(){
-        return view('invoices.archiveinvoices');
+        $start = Carbon::now()->startOfMonth();
+        $end   = Carbon::now()->endOfDay();
+        $stats = EArchiveInvoicesOut::whereBetween('issue_date', [$start, $end])
+            ->selectRaw("COUNT(*) as total, SUM(payable_amount) as toplam, SUM(taxable_amount) as vergisiz")
+            ->first();
+        return view('invoices.archiveinvoices', compact('stats'));
+    }
+
+    public function report(Request $request){
+        $startDate = $request->start_date ?? null;
+        $endDate   = $request->end_date   ?? null;
+
+        // Gelen Fatura
+        $gelenQuery = InvoicesIn::withoutGlobalScopes();
+        if ($startDate) $gelenQuery->where('issue_date', '>=', $startDate . ' 00:00:00');
+        if ($endDate)   $gelenQuery->where('issue_date', '<=', $endDate   . ' 23:59:59');
+        $gelen = $gelenQuery->selectRaw("
+            COUNT(*) as total,
+            SUM(payable_amount) as toplam_odeme,
+            SUM(tax_exclusive_total_amount) as vergisiz_tutar,
+            SUM(tax_inclusive_total_amount) as vergili_tutar,
+            SUM(line_extension_amount) as mal_hizmet_toplam,
+            SUM(allowance_total_amount) as iskonto
+        ")->first();
+
+        // Giden Fatura
+        $gidenQuery = InvoicesOut::withoutGlobalScopes();
+        if ($startDate) $gidenQuery->where('issue_date', '>=', $startDate . ' 00:00:00');
+        if ($endDate)   $gidenQuery->where('issue_date', '<=', $endDate   . ' 23:59:59');
+        $giden = $gidenQuery->selectRaw("
+            COUNT(*) as total,
+            SUM(payable_amount) as toplam_odeme,
+            SUM(tax_exclusive_total_amount) as vergisiz_tutar,
+            SUM(tax_inclusive_total_amount) as vergili_tutar,
+            SUM(line_extension_amount) as mal_hizmet_toplam,
+            SUM(allowance_total_amount) as iskonto
+        ")->first();
+
+        // E-Arşiv Fatura
+        $arsivQuery = EArchiveInvoicesOut::query();
+        if ($startDate) $arsivQuery->where('issue_date', '>=', $startDate . ' 00:00:00');
+        if ($endDate)   $arsivQuery->where('issue_date', '<=', $endDate   . ' 23:59:59');
+        $arsiv = $arsivQuery->selectRaw("
+            COUNT(*) as total,
+            SUM(payable_amount) as toplam_odeme,
+            SUM(taxable_amount) as vergisiz_tutar
+        ")->first();
+
+        return view('invoices.report', compact('gelen', 'giden', 'arsiv', 'startDate', 'endDate'));
     }
 
 
@@ -70,8 +128,8 @@ class InvoiceController extends Controller
         } elseif (!empty($request->end_date)) {
             $query->whereDate('InvoiceDate', '<=', $request->end_date);
         } else {
-            // Default: Son 1 ay
-            $query->whereRaw('InvoiceDate >= DATEADD(MONTH, -1, GETDATE())');
+            // Default: Son 1 ay (bugün hariç)
+            $query->whereRaw("InvoiceDate >= DATEADD(MONTH, -1, CAST(GETDATE() AS date)) AND InvoiceDate < CAST(GETDATE() AS date)");
         }
 
         // Sıralama ve limit
@@ -119,8 +177,8 @@ class InvoiceController extends Controller
         } elseif (!empty($request->end_date)) {
             $query->whereDate('IssueDate', '<=', $request->end_date);
         } else {
-            // Default: Son 1 ay
-            $query->whereRaw('IssueDate >= DATEADD(MONTH, -1, GETDATE())');
+            // Default: Son 1 ay (bugün hariç)
+            $query->whereRaw("IssueDate >= DATEADD(MONTH, -1, CAST(GETDATE() AS date)) AND IssueDate < CAST(GETDATE() AS date)");
         }
 
         // Sıralama ve limit
@@ -167,8 +225,8 @@ class InvoiceController extends Controller
         } elseif (!empty($request->end_date)) {
             $query->whereDate('InvoiceDate', '<=', $request->end_date);
         } else {
-            // Default: Son 1 ay
-            $query->whereRaw('InvoiceDate >= DATEADD(MONTH, -1, GETDATE())');
+            // Default: Son 1 ay (bugün hariç)
+            $query->whereRaw("InvoiceDate >= DATEADD(MONTH, -1, CAST(GETDATE() AS date)) AND InvoiceDate < CAST(GETDATE() AS date)");
         }
 
         // Sıralama ve limit
@@ -283,12 +341,11 @@ class InvoiceController extends Controller
 
     public static function getLastMonth(){
         $endDate = Carbon::today();
-        //$startDate = $endDate->copy()->subMonth();
-        $startDate = $endDate->copy()->subDays(2); // Son 2 gün
+        $startDate = $endDate->copy()->subMonth();
         $dates = [];
 
         $currentDate = $startDate->copy();
-        while ($currentDate->lte($endDate)) { // currentDate <= endDate
+        while ($currentDate->lte($endDate)) {
             $dates[] = $currentDate->format('Y-m-d');
             $currentDate->addDay();
         }
